@@ -1,5 +1,7 @@
 name: Build SafeGuard APK
-
+on:
+  push:
+  workflow_dispatch:
 on:
   push:
     branches: [ "main", "master" ]
