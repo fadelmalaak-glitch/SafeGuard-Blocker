@@ -41,6 +41,29 @@ class SafeDnsVpnService : VpnService() {
         private const val SENTINEL_DNS = "10.111.0.1"
         private const val LOCAL_ADDR = "10.111.0.2"
 
+        // Public unfiltered resolvers that apps/browsers may hardcode for plain DNS, DoH
+        // (443) or DoT (853). Routed into the tunnel: plain DNS to them gets filtered by
+        // our engine; any other traffic to them (DoH/DoT) is dropped, so browsers fall
+        // back to the system (filtered) resolver. Our own upstream sockets are protect()ed
+        // and these lists deliberately exclude the filtering upstreams below.
+        private val BYPASS_RESOLVERS_V4 = listOf(
+            "8.8.8.8", "8.8.4.4",                 // Google
+            "1.1.1.1", "1.0.0.1",                 // Cloudflare (unfiltered)
+            "9.9.9.9", "149.112.112.112",         // Quad9
+            "208.67.222.222", "208.67.220.220",   // OpenDNS
+            "94.140.14.14", "94.140.15.15",       // AdGuard
+            "45.90.28.0", "45.90.30.0",           // NextDNS anycast
+            "185.222.222.222", "45.11.45.11"      // DNS.SB
+        )
+        private val BYPASS_RESOLVERS_V6 = listOf(
+            "2001:4860:4860::8888", "2001:4860:4860::8844",
+            "2606:4700:4700::1111", "2606:4700:4700::1001",
+            "2620:fe::fe", "2620:fe::9",
+            "2620:119:35::35", "2620:119:53::53",
+            "2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"
+        )
+        private const val LOCAL_ADDR_V6 = "fd00:5afe:6a4d::2"
+
         // Filtering upstream resolvers (adult + malware blocking).
         private val UPSTREAMS = listOf(
             "185.228.168.10", // CleanBrowsing Adult Filter (primary)
@@ -113,6 +136,15 @@ class SafeDnsVpnService : VpnService() {
             .addAddress(LOCAL_ADDR, 32)
             .addDnsServer(SENTINEL_DNS)
             .addRoute(SENTINEL_DNS, 32)
+        for (ip in BYPASS_RESOLVERS_V4) {
+            try { builder.addRoute(ip, 32) } catch (_: Exception) {}
+        }
+        try {
+            builder.addAddress(LOCAL_ADDR_V6, 128)
+            for (ip in BYPASS_RESOLVERS_V6) {
+                try { builder.addRoute(ip, 128) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) { /* IPv6 unavailable; IPv4 protection still applies */ }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
         }
@@ -177,7 +209,9 @@ class SafeDnsVpnService : VpnService() {
         val dns = packet.copyOfRange(dnsOff, dnsEnd)
 
         val qname = parseQName(dns)
-        val response: ByteArray = if (qname != null && Blocklists.isBlockedHost(qname)) {
+        val blocked = qname != null &&
+            (Blocklists.isBlockedHost(qname) || Blocklists.isDohHost(qname))
+        val response: ByteArray = if (blocked) {
             buildNxDomain(dns)
         } else {
             forwardUpstream(dns) ?: buildNxDomain(dns)

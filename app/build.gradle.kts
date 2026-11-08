@@ -14,8 +14,8 @@ android {
         // enforcement so the app installs and runs reliably on sideloaded devices, including
         // Android 15 phones such as the Oppo Reno 15. Not published to Play, so this is fine.
         targetSdk = 33
-        versionCode = 7
-        versionName = "3.3"
+        versionCode = 8
+        versionName = "3.4"
     }
 
     signingConfigs {
