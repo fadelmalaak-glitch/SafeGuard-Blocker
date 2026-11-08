@@ -1,10 +1,14 @@
-
 name: Build SafeGuard APK
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'ccr-**'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -14,23 +18,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.5'
+          gradle-version: '8.7'
 
-      - name: Build APK
-        working-directory: SafeGuardBlocker
-        run: gradle assembleDebug
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/SafeGuard.apk
+          ls -la dist
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SafeGuard-Blocker-APK
-          path: SafeGuardBlocker/app/build/outputs/apk/debug/*.apk
+          name: SafeGuard-APK
+          path: dist/SafeGuard.apk
+
+      - name: Publish downloadable release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: SafeGuard APK (build ${{ github.run_number }})
+          body: |
+            ملف التثبيت جاهز. نزّل SafeGuard.apk من الأسفل وثبّته على الموبايل.
+            فعّل من داخل التطبيق: فلتر الشبكة + حارس المتصفحات + منع الحذف.
+          files: dist/SafeGuard.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

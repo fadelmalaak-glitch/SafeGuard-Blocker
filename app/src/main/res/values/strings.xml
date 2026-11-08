@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SafeGuard</string>
+    <string name="admin_label">SafeGuard Protection</string>
+    <string name="admin_description">يمنع حذف التطبيق بسهولة ويحمي إعدادات الفلتر.</string>
+    <string name="accessibility_label">SafeGuard Content Guard</string>
+    <string name="accessibility_description">يراقب المتصفحات ويحجب المحتوى الإباحي فور ظهوره.</string>
+</resources>
