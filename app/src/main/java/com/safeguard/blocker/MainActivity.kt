@@ -2,6 +2,9 @@ package com.safeguard.blocker
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
@@ -23,13 +26,18 @@ class MainActivity : Activity() {
 
     private lateinit var statusText: TextView
     private lateinit var container: LinearLayout
+    private lateinit var dpm: DevicePolicyManager
+    private lateinit var adminComponent: ComponentName
 
     companion object {
         private const val REQ_VPN = 1001
+        private const val REQ_ADMIN = 1002
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        adminComponent = ComponentName(this, GuardDeviceAdminReceiver::class.java)
         val scroll = ScrollView(this)
         container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -42,6 +50,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        ProtectionController.enforceDeviceOwnerLock(this)
         if (::statusText.isInitialized) updateStatus()
     }
 
@@ -80,6 +89,7 @@ class MainActivity : Activity() {
         container.addView(statusText)
 
         addButton("تفعيل فلتر المحتوى (يشتغل على كل المتصفحات)") { startVpnProtection() }
+        addButton("تفعيل منع الحذف (Device Admin)") { activateDeviceAdmin() }
 
         addText("—")
         addText("مواعيد التشغيل التلقائي: من ${hour(Prefs.startHour(this))} حتى ${hour(Prefs.endHour(this))}.")
@@ -105,6 +115,21 @@ class MainActivity : Activity() {
             ProtectionController.enableProtection(this)
             toast("تم تفعيل الفلتر ✅")
             updateStatus()
+        }
+    }
+
+    private fun activateDeviceAdmin() {
+        if (!dpm.isAdminActive(adminComponent)) {
+            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                putExtra(
+                    DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                    "تمنع حذف التطبيق بسهولة وتضيف حاجز قبل إيقاف الحماية."
+                )
+            }
+            startActivityForResult(intent, REQ_ADMIN)
+        } else {
+            toast("منع الحذف مفعّل بالفعل")
         }
     }
 
@@ -147,7 +172,7 @@ class MainActivity : Activity() {
             .setPositiveButton("إيقاف") { _, _ ->
                 if (Prefs.checkPin(this, input.text.toString())) {
                     ProtectionController.disableProtection(this)
-                    toast("تم إيقاف الفلتر.")
+                    toast("تم إيقاف الفلتر. لحذف التطبيق: عطّل Device Admin أولاً من الإعدادات.")
                     updateStatus()
                 } else {
                     toast("كلمة السر غير صحيحة")
@@ -159,10 +184,12 @@ class MainActivity : Activity() {
 
     private fun updateStatus() {
         val on = if (Prefs.protectionEnabled(this)) "مفعّلة ✅" else "متوقفة ❌"
+        val admin = if (dpm.isAdminActive(adminComponent)) "مفعّل ✅" else "غير مفعّل ❌"
         val active = if (ScheduleManager.shouldBeActiveNow(this)) "ضمن وقت التشغيل الآن ⏰"
                      else "خارج وقت التشغيل الآن"
         statusText.text = buildString {
             appendLine("الحماية: $on")
+            appendLine("منع الحذف (Device Admin): $admin")
             appendLine(active)
             appendLine("الفلتر: CleanBrowsing Adult + Cloudflare Family")
         }
@@ -173,6 +200,9 @@ class MainActivity : Activity() {
         if (requestCode == REQ_VPN && resultCode == RESULT_OK) {
             ProtectionController.enableProtection(this)
             toast("تم تفعيل الفلتر ✅")
+        }
+        if (requestCode == REQ_ADMIN && resultCode == RESULT_OK) {
+            toast("تم تفعيل منع الحذف ✅")
         }
         if (::statusText.isInitialized) updateStatus()
     }
