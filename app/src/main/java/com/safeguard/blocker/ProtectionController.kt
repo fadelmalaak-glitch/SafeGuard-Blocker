@@ -1,30 +1,11 @@
 package com.safeguard.blocker
 
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 
 /** Single entry point for turning filtering on/off, used by UI, boot, and scheduler. */
 object ProtectionController {
-
-    /**
-     * Optional advanced hardening: only takes effect if the user has made the app a
-     * Device Owner via ADB (see README). It then blocks uninstall at the OS policy
-     * level. Fully reversible by the user from their own computer, so this is strong
-     * self-control friction, not hidden/undeletable malware.
-     */
-    fun enforceDeviceOwnerLock(ctx: Context) {
-        val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        if (!dpm.isDeviceOwnerApp(ctx.packageName)) return
-        val admin = ComponentName(ctx, GuardDeviceAdminReceiver::class.java)
-        try {
-            dpm.setUninstallBlocked(admin, ctx.packageName, true)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
 
     /** User turned protection ON: persist intent, arm the schedule, start if in window. */
     fun enableProtection(ctx: Context) {

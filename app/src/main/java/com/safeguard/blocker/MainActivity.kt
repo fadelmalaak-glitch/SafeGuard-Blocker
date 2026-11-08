@@ -2,16 +2,11 @@ package com.safeguard.blocker
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
-import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -20,27 +15,21 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Control screen. Transparent self-control tool: everything here is visible and the
- * user can turn protection off deliberately after entering their PIN — there is no
- * hidden or truly-undeletable behaviour.
+ * Control screen for a transparent, self-control DNS content filter. The filtering
+ * runs through a local VpnService (works across every browser and app). Protection
+ * can be stopped only after entering the user's PIN.
  */
 class MainActivity : Activity() {
 
-    private lateinit var dpm: DevicePolicyManager
-    private lateinit var adminComponent: ComponentName
     private lateinit var statusText: TextView
     private lateinit var container: LinearLayout
 
     companion object {
         private const val REQ_VPN = 1001
-        private const val REQ_ADMIN = 1002
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        adminComponent = ComponentName(this, GuardDeviceAdminReceiver::class.java)
-
         val scroll = ScrollView(this)
         container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -48,28 +37,19 @@ class MainActivity : Activity() {
         }
         scroll.addView(container)
         setContentView(scroll)
-
         render()
     }
 
     override fun onResume() {
         super.onResume()
-        ProtectionController.enforceDeviceOwnerLock(this)
         if (::statusText.isInitialized) updateStatus()
     }
 
     private fun render() {
         container.removeAllViews()
-
         addTitle("SafeGuard — فلتر المحتوى")
-        if (!Prefs.hasPin(this)) {
-            renderPinSetup()
-        } else {
-            renderControls()
-        }
+        if (!Prefs.hasPin(this)) renderPinSetup() else renderControls()
     }
-
-    // ---- First run: set the self-control PIN ----
 
     private fun renderPinSetup() {
         addText("لأول مرة: اختر كلمة سر (PIN) من 4 أرقام على الأقل. هتحتاجها عشان توقف الحماية لاحقاً.")
@@ -84,35 +64,22 @@ class MainActivity : Activity() {
         container.addView(pin)
         container.addView(pin2)
         addButton("حفظ كلمة السر والمتابعة") {
-            val a = pin.text.toString()
-            val b = pin2.text.toString()
+            val a = pin.text.toString(); val b = pin2.text.toString()
             when {
                 a.length < 4 -> toast("الـ PIN لازم يكون 4 أرقام على الأقل")
                 a != b -> toast("الكلمتين مش متطابقتين")
-                else -> {
-                    Prefs.setPin(this, a)
-                    toast("تم الحفظ ✅")
-                    render()
-                }
+                else -> { Prefs.setPin(this, a); toast("تم الحفظ ✅"); render() }
             }
         }
     }
 
-    // ---- Main controls ----
-
     private fun renderControls() {
         statusText = TextView(this).apply {
-            textSize = 14f
-            setPadding(0, 8, 0, 32)
+            textSize = 14f; setPadding(0, 8, 0, 32)
         }
         container.addView(statusText)
 
-        addButton("1) تفعيل فلتر الشبكة (يشتغل على كل المتصفحات)") { startVpnProtection() }
-        addButton("2) تفعيل حارس المتصفحات (Accessibility)") {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            toast("فعّل خدمة SafeGuard Content Guard")
-        }
-        addButton("3) تفعيل منع الحذف السهل (Device Admin)") { activateDeviceAdmin() }
+        addButton("تفعيل فلتر المحتوى (يشتغل على كل المتصفحات)") { startVpnProtection() }
 
         addText("—")
         addText("مواعيد التشغيل التلقائي: من ${hour(Prefs.startHour(this))} حتى ${hour(Prefs.endHour(this))}.")
@@ -138,21 +105,6 @@ class MainActivity : Activity() {
             ProtectionController.enableProtection(this)
             toast("تم تفعيل الفلتر ✅")
             updateStatus()
-        }
-    }
-
-    private fun activateDeviceAdmin() {
-        if (!dpm.isAdminActive(adminComponent)) {
-            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
-                putExtra(
-                    DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                    "تمنع حذف التطبيق بسهولة وتضيف حاجز قبل إيقاف الحماية."
-                )
-            }
-            startActivityForResult(intent, REQ_ADMIN)
-        } else {
-            toast("منع الحذف مفعّل بالفعل")
         }
     }
 
@@ -195,7 +147,7 @@ class MainActivity : Activity() {
             .setPositiveButton("إيقاف") { _, _ ->
                 if (Prefs.checkPin(this, input.text.toString())) {
                     ProtectionController.disableProtection(this)
-                    toast("تم إيقاف الفلتر. لحذف التطبيق: عطّل Device Admin أولاً من الإعدادات.")
+                    toast("تم إيقاف الفلتر.")
                     updateStatus()
                 } else {
                     toast("كلمة السر غير صحيحة")
@@ -206,12 +158,11 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus() {
-        val admin = if (dpm.isAdminActive(adminComponent)) "مفعّل ✅" else "غير مفعّل ❌"
         val on = if (Prefs.protectionEnabled(this)) "مفعّلة ✅" else "متوقفة ❌"
-        val active = if (ScheduleManager.shouldBeActiveNow(this)) "ضمن وقت التشغيل الآن ⏰" else "خارج وقت التشغيل الآن"
+        val active = if (ScheduleManager.shouldBeActiveNow(this)) "ضمن وقت التشغيل الآن ⏰"
+                     else "خارج وقت التشغيل الآن"
         statusText.text = buildString {
             appendLine("الحماية: $on")
-            appendLine("منع الحذف (Device Admin): $admin")
             appendLine(active)
             appendLine("الفلتر: CleanBrowsing Adult + Cloudflare Family")
         }
@@ -226,14 +177,11 @@ class MainActivity : Activity() {
         if (::statusText.isInitialized) updateStatus()
     }
 
-    // ---- small UI helpers ----
-
     private fun hour(h: Int) = String.format("%02d:00", h)
 
     private fun addTitle(t: String) {
         container.addView(TextView(this).apply {
-            text = t; textSize = 22f; gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 24)
+            text = t; textSize = 22f; gravity = Gravity.CENTER; setPadding(0, 0, 0, 24)
         })
     }
 
