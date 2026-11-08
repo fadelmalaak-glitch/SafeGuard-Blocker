@@ -201,10 +201,42 @@ class MainActivity : Activity() {
             ProtectionController.enableProtection(this)
             toast("تم تفعيل الفلتر ✅")
         }
-        if (requestCode == REQ_ADMIN && resultCode == RESULT_OK) {
-            toast("تم تفعيل منع الحذف ✅")
+        if (requestCode == REQ_ADMIN) {
+            if (dpm.isAdminActive(adminComponent)) {
+                toast("تم تفعيل منع الحذف ✅")
+            } else {
+                showRestrictedSettingsHelp()
+            }
         }
         if (::statusText.isInitialized) updateStatus()
+    }
+
+    /**
+     * Android 13+ blocks sideloaded apps from requesting Device Admin until the user
+     * explicitly allows "restricted settings" for the app. Guide them there.
+     */
+    private fun showRestrictedSettingsHelp() {
+        AlertDialog.Builder(this)
+            .setTitle("لازم تسمح بالإعدادات المقيّدة")
+            .setMessage(
+                "أندرويد بيمنع التطبيقات المتسطبة من ملف APK من تفعيل منع الحذف لحد ما تسمح بيها بنفسك:\n\n" +
+                "1) دوس «فتح إعدادات التطبيق» تحت.\n" +
+                "2) دوس ⋮ (التلات نقط) فوق على اليمين.\n" +
+                "3) اختار «السماح بالإعدادات المقيّدة» وأكّد.\n" +
+                "4) ارجع هنا ودوس «تفعيل منع الحذف» تاني."
+            )
+            .setPositiveButton("فتح إعدادات التطبيق") { _, _ ->
+                try {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(android.net.Uri.fromParts("package", packageName, null))
+                    )
+                } catch (_: Exception) {
+                    toast("افتح الإعدادات ← التطبيقات ← SafeGuard يدوياً")
+                }
+            }
+            .setNegativeButton("لاحقاً", null)
+            .show()
     }
 
     private fun hour(h: Int) = String.format("%02d:00", h)
