@@ -32,13 +32,13 @@ jobs:
       - name: Point Gradle at the preinstalled Android SDK
         run: echo "sdk.dir=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" > local.properties
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Build release APK (signed with the stable keystore)
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/SafeGuard.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/SafeGuard.apk
           ls -la dist
 
       - name: Upload APK artifact

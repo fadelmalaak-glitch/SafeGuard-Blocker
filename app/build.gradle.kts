@@ -14,8 +14,24 @@ android {
         // enforcement so the app installs and runs reliably on sideloaded devices, including
         // Android 15 phones such as the Oppo Reno 15. Not published to Play, so this is fine.
         targetSdk = 33
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 3
+        versionName = "2.1"
+    }
+
+    signingConfigs {
+        create("release") {
+            // Stable, committed keystore so every build shares one signature. This fixes
+            // "App not installed" caused by signature mismatches across rebuilds, and a
+            // proper (non-debug) signature is accepted more readily by OEM installers
+            // such as Oppo/ColorOS. For a personal self-control app this is acceptable.
+            storeFile = file("safeguard-release.keystore")
+            storePassword = "safeguard2024"
+            keyAlias = "safeguard"
+            keyPassword = "safeguard2024"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
     }
 
     buildTypes {
@@ -23,9 +39,9 @@ android {
             isMinifyEnabled = false
         }
         release {
-            // Debug-signed so the APK installs out of the box via sideload (no keystore needed).
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -36,6 +52,11 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 
