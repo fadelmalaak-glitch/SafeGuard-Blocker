@@ -11,8 +11,12 @@ object ProtectionController {
 
     /**
      * Optional advanced hardening: only takes effect if the user has made the app a
-     * Device Owner via ADB (see README). It then blocks uninstall at the OS policy
-     * level. Fully reversible by the user from their own computer.
+     * Device Owner via ADB (see README). It then, at the OS policy level:
+     *   - blocks uninstall of the app,
+     *   - forces this app as an always-on VPN with lockdown (no traffic without the
+     *     filter, and the user cannot turn the VPN off from Settings),
+     *   - forbids changing VPN configuration.
+     * Fully reversible by the user from their own computer (adb / factory reset).
      */
     fun enforceDeviceOwnerLock(ctx: Context) {
         val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -20,6 +24,11 @@ object ProtectionController {
         val admin = ComponentName(ctx, GuardDeviceAdminReceiver::class.java)
         try {
             dpm.setUninstallBlocked(admin, ctx.packageName, true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                // lockdownEnabled = true: block all traffic while the VPN is down.
+                dpm.setAlwaysOnVpnPackage(admin, ctx.packageName, true)
+            }
+            dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_CONFIG_VPN)
         } catch (e: Exception) {
             e.printStackTrace()
         }

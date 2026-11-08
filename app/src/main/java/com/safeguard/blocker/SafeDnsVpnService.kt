@@ -313,8 +313,21 @@ class SafeDnsVpnService : VpnService() {
     }
 
     override fun onRevoke() {
-        // Respect the OS/user revoke; stop cleanly rather than fighting it.
-        stopEverything()
+        // Best effort: if protection is still meant to be active, try to restart the
+        // tunnel. (If the user revoked consent in Settings this may fail, in which case
+        // we stop cleanly — the robust lock is the Device Owner always-on VPN.)
+        running = false
+        try { tun?.close() } catch (_: Exception) {}
+        tun = null
+        if (Prefs.protectionEnabled(this) && ScheduleManager.shouldBeActiveNow(this)) {
+            try {
+                startTunnel()
+            } catch (_: Exception) {
+                stopEverything()
+            }
+        } else {
+            stopEverything()
+        }
         super.onRevoke()
     }
 
