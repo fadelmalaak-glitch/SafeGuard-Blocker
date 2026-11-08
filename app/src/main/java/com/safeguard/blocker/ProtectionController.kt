@@ -25,8 +25,11 @@ object ProtectionController {
         try {
             dpm.setUninstallBlocked(admin, ctx.packageName, true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                // lockdownEnabled = true: block all traffic while the VPN is down.
-                dpm.setAlwaysOnVpnPackage(admin, ctx.packageName, true)
+                // lockdownEnabled = false: our VPN is split-tunnel (only DNS is routed),
+                // so lockdown would block all non-DNS traffic and kill the internet.
+                // Always-on alone keeps the filter auto-restarted; DISALLOW_CONFIG_VPN
+                // below stops the user from switching it off in Settings.
+                dpm.setAlwaysOnVpnPackage(admin, ctx.packageName, false)
             }
             dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_CONFIG_VPN)
         } catch (e: Exception) {
